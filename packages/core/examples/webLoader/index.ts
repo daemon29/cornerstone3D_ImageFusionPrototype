@@ -1,0 +1,220 @@
+import type { Types } from '@cornerstonejs/core';
+import {
+  RenderingEngine,
+  Enums,
+  imageLoader,
+  metaData,
+  getRenderingEngine,
+  setVolumesForViewports,
+  volumeLoader,
+} from '@cornerstonejs/core';
+import { LengthTool, ToolGroupManager } from '@cornerstonejs/tools';
+import {
+  initDemo,
+  setTitleAndDescription,
+  addSliderToToolbar,
+  addManipulationBindings,
+  addButtonToToolbar,
+} from '../../../../utils/demo/helpers';
+import hardcodedMetaDataProvider from './hardcodedMetaDataProvider';
+import registerWebImageLoader from './registerWebImageLoader';
+
+// This is for debugging purposes
+console.warn(
+  'Click on index.ts to open source code for this example --------->'
+);
+
+const { ViewportType } = Enums;
+
+const toolGroupId = 'toolGroup';
+
+// ======== Set up page ======== //
+setTitleAndDescription(
+  'Web Color Images',
+  'Demonstrates how to render a web color image in JPG or PNG format in a StackViewport'
+);
+
+const content = document.getElementById('content');
+
+const element1 = document.createElement('div');
+element1.id = 'cornerstone-element1';
+element1.style.width = '500px';
+element1.style.height = '500px';
+
+const paraElement = document.createElement('p');
+const paraText = document.createTextNode('volume viewport');
+paraElement.appendChild(paraText);
+
+const rowElement = document.createElement('div');
+rowElement.style.display = 'flex';
+rowElement.style.justifyContent = 'space-between';
+
+const element2 = document.createElement('div');
+element2.id = 'cornerstone-element2';
+element2.style.width = '500px';
+element2.style.height = '500px';
+
+const element3 = document.createElement('div');
+element3.id = 'cornerstone-element3';
+element3.style.width = '500px';
+element3.style.height = '500px';
+
+const element4 = document.createElement('div');
+element4.id = 'cornerstone-element4';
+element4.style.width = '500px';
+element4.style.height = '500px';
+
+rowElement.appendChild(element2);
+rowElement.appendChild(element3);
+rowElement.appendChild(element4);
+
+content.appendChild(element1);
+content.appendChild(paraElement);
+content.appendChild(rowElement);
+
+element1.oncontextmenu = (e) => e.preventDefault();
+element2.oncontextmenu = (e) => e.preventDefault();
+element3.oncontextmenu = (e) => e.preventDefault();
+element4.oncontextmenu = (e) => e.preventDefault();
+
+const renderingEngineId = 'myRenderingEngine';
+const viewportId = 'COLOR_STACK';
+
+// png images hosted on web (s3 with cors enabled) from the visible human project
+// https://www.nlm.nih.gov/research/visible/visible_human.html
+const imageIds = [
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1460.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1461.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1462.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1463.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1464.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1465.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1466.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1467.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1468.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1469.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1470.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1471.png',
+  'web:https://cs3d-jpg-example.s3.us-east-2.amazonaws.com/a_vm1472.png',
+];
+
+registerWebImageLoader(imageLoader);
+
+// ============================= //
+
+addSliderToToolbar({
+  title: 'Slice Index',
+  range: [0, 9],
+  defaultValue: 0,
+  onSelectedValueChange: (value) => {
+    const valueAsNumber = Number(value);
+
+    // Get the rendering engine
+    const renderingEngine = getRenderingEngine(renderingEngineId);
+
+    // Get the volume viewport
+    const viewport = renderingEngine.getViewport(
+      viewportId
+    ) as Types.IStackViewport;
+
+    viewport.setImageIdIndex(valueAsNumber);
+    viewport.render();
+  },
+});
+
+addButtonToToolbar({
+  title: 'Invert',
+  onClick: () => {
+    // Get the rendering engine
+    const renderingEngine = getRenderingEngine(renderingEngineId);
+
+    // Get the volume viewport
+    const viewport = renderingEngine.getViewport(
+      viewportId
+    ) as Types.IVolumeViewport;
+
+    const { invert } = viewport.getProperties();
+
+    viewport.setProperties({ invert: !invert });
+
+    viewport.render();
+  },
+});
+
+/**
+ * Runs the demo
+ */
+async function run() {
+  // Init Cornerstone and related libraries
+  await initDemo();
+  // Define tool groups to add the segmentation display tool to
+  const toolGroup = ToolGroupManager.createToolGroup(toolGroupId);
+  addManipulationBindings(toolGroup);
+
+  metaData.addProvider(
+    // @ts-ignore
+    (type, imageId) => hardcodedMetaDataProvider(type, imageId, imageIds),
+    10000
+  );
+
+  // Instantiate a rendering engine
+  const renderingEngine = new RenderingEngine(renderingEngineId);
+
+  const viewportInputArray = [
+    {
+      viewportId: 'COLOR_STACK',
+      type: ViewportType.STACK,
+      element: element1,
+    },
+    {
+      viewportId: 'COLOR_VOLUME_1',
+      type: ViewportType.ORTHOGRAPHIC,
+      element: element2,
+    },
+    {
+      viewportId: 'COLOR_VOLUME_2',
+      type: ViewportType.ORTHOGRAPHIC,
+      element: element3,
+      defaultOptions: {
+        orientation: Enums.OrientationAxis.CORONAL,
+      },
+    },
+    {
+      viewportId: 'COLOR_VOLUME_3',
+      type: ViewportType.ORTHOGRAPHIC,
+      element: element4,
+      defaultOptions: {
+        orientation: Enums.OrientationAxis.SAGITTAL,
+      },
+    },
+  ];
+
+  toolGroup.addViewport('COLOR_STACK', renderingEngineId);
+  toolGroup.addViewport('COLOR_VOLUME_1', renderingEngineId);
+  toolGroup.addViewport('COLOR_VOLUME_2', renderingEngineId);
+  toolGroup.addViewport('COLOR_VOLUME_3', renderingEngineId);
+
+  const volumeId = 'cornerstoneStreamingImageVolume:COLOR_VOLUME';
+
+  const volume = await volumeLoader.createAndCacheVolume(volumeId, {
+    imageIds,
+  });
+
+  renderingEngine.setViewports(viewportInputArray);
+
+  // render stack viewport
+  renderingEngine.getStackViewports()[0].setStack(imageIds);
+
+  await setVolumesForViewports(
+    renderingEngine,
+    [{ volumeId }],
+    ['COLOR_VOLUME_1', 'COLOR_VOLUME_2', 'COLOR_VOLUME_3']
+  );
+
+  await volume.load();
+
+  // render volume viewports
+  renderingEngine.render();
+}
+
+run();

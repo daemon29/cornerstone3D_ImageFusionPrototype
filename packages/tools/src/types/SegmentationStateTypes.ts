@@ -1,0 +1,146 @@
+import type { Enums as coreEnums, Types } from '@cornerstonejs/core';
+import type * as Enums from '../enums';
+import type { ContourSegmentationData } from './ContourTypes';
+import type { LabelmapSegmentationData } from './LabelmapTypes';
+import type { SurfaceSegmentationData } from './SurfaceTypes';
+import type vtkColorTransferFunction from '@kitware/vtk.js/Rendering/Core/ColorTransferFunction';
+import type vtkPiecewiseFunction from '@kitware/vtk.js/Common/DataModel/PiecewiseFunction';
+
+export type RepresentationsData = {
+  [Enums.SegmentationRepresentations.Labelmap]?: LabelmapSegmentationData;
+  [Enums.SegmentationRepresentations.Contour]?: ContourSegmentationData;
+  [Enums.SegmentationRepresentations.Surface]?: SurfaceSegmentationData;
+};
+
+export type RepresentationData =
+  | LabelmapSegmentationData
+  | ContourSegmentationData
+  | SurfaceSegmentationData;
+
+export type Segment = {
+  /** segment index */
+  segmentIndex: number;
+  /** segment label */
+  label: string;
+  /** is segment locked for editing */
+  locked: boolean;
+  /** cached stats for the segment, e.g., pt suv mean, max etc. */
+  cachedStats: { [key: string]: unknown };
+  /** is segment active for editing, at the same time only one segment can be active for editing */
+  active: boolean;
+};
+
+/**
+ * Global Segmentation Data which is used for the segmentation
+ */
+export type Segmentation = {
+  /** segmentation id  */
+  segmentationId: string;
+  /** segmentation label */
+  label: string;
+  segments: {
+    [segmentIndex: number]: Segment;
+  };
+  /**
+   * Representations of the segmentation. Each segmentation "can" be viewed
+   * in various representations. For instance, if a DICOM SEG is loaded, the main
+   * representation is the labelmap. However, for DICOM RT the main representation
+   * is contours, and other representations can be derived from the contour (currently
+   * only labelmap representation is supported)
+   */
+  representationData: RepresentationsData;
+  /**
+   * Segmentation level stats, Note each segment can have its own stats
+   * This is used for caching stats for the segmentation level
+   */
+  cachedStats: { [key: string]: unknown };
+};
+
+export type LabelmapRenderingConfig = {
+  cfun: vtkColorTransferFunction;
+  ofun: vtkPiecewiseFunction;
+  colorLUTIndex: number;
+  // segmentation blend mode if desired
+  blendMode?: coreEnums.BlendModes;
+};
+
+export type ContourRenderingConfig = {};
+
+export type SurfaceRenderingConfig = {};
+
+export type RenderingConfig =
+  | LabelmapRenderingConfig
+  | ContourRenderingConfig
+  | SurfaceRenderingConfig;
+
+type BaseSegmentationRepresentation = {
+  colorLUTIndex: number;
+  // identifier for the segmentation representation
+  segmentationId: string;
+  type: Enums.SegmentationRepresentations;
+  // settings
+  visible: boolean;
+  active: boolean;
+  segments: {
+    [segmentIndex: number]: {
+      visible: boolean;
+    };
+  };
+};
+
+export type LabelmapRepresentation = BaseSegmentationRepresentation & {
+  config: LabelmapRenderingConfig;
+};
+
+export type ContourRepresentation = BaseSegmentationRepresentation & {
+  config: ContourRenderingConfig;
+};
+
+export type SurfaceRepresentation = BaseSegmentationRepresentation & {
+  config: SurfaceRenderingConfig;
+};
+
+export type SegmentationRepresentation =
+  | LabelmapRepresentation
+  | ContourRepresentation
+  | SurfaceRepresentation;
+
+export type SegmentationState = {
+  /** Array of colorLUT for segmentation to render */
+  colorLUT: Types.ColorLUT[];
+  /** segmentations */
+  segmentations: Segmentation[];
+  /** viewports association with segmentation representations */
+  viewportSegRepresentations: {
+    [viewportId: string]: Array<SegmentationRepresentation>;
+  };
+};
+
+export type SegmentationPublicInput = {
+  segmentationId: string;
+  representation: {
+    type: Enums.SegmentationRepresentations;
+    data?: RepresentationData;
+  };
+  config?: {
+    segments?: {
+      [segmentIndex: number]: Partial<Segment>;
+    };
+    label?: string;
+    // segmentation level stats
+    cachedStats?: { [key: string]: unknown };
+  };
+};
+
+/**
+ * Represents the input structure for adding a segmentation to a viewport.
+ */
+export type RepresentationPublicInput = {
+  /** The unique identifier for the segmentation. */
+  segmentationId: string;
+  type?: Enums.SegmentationRepresentations;
+  config?: {
+    colorLUTOrIndex?: Types.ColorLUT | number;
+    blendMode?: coreEnums.BlendModes;
+  };
+};

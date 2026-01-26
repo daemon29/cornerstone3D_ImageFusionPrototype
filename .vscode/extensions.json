@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "PolyMeilex.wgsl",
+    "oxc.oxc-vscode"
+  ]
+}

@@ -1,0 +1,13 @@
+# Ignore the version.js because it is generated
+src/version.ts
+
+# Misc items
+*.sw*
+*~
+
+node_modules
+.idea
+yarn-error.log
+yarn.lock
+.DS_Store
+build
