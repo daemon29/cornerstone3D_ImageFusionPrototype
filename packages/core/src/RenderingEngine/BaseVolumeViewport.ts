@@ -1486,18 +1486,18 @@ abstract class BaseVolumeViewport extends Viewport {
     volumeInputArray: IVolumeInput[],
     FrameOfReferenceUID: string
   ): Promise<boolean> {
-    const numVolumes = volumeInputArray.length;
+    // const numVolumes = volumeInputArray.length;
 
-    // Check all other volumes exist and have the same FrameOfReference
-    for (let i = 1; i < numVolumes; i++) {
-      const imageVolume = cache.getVolume(volumeInputArray[i].volumeId);
+    // // Check all other volumes exist and have the same FrameOfReference
+    // for (let i = 1; i < numVolumes; i++) {
+    //   const imageVolume = cache.getVolume(volumeInputArray[i].volumeId);
 
-      if (FrameOfReferenceUID !== imageVolume.metadata.FrameOfReferenceUID) {
-        throw new Error(
-          `Volumes being added to viewport ${this.id} do not share the same FrameOfReferenceUID. This is not yet supported`
-        );
-      }
-    }
+    //   if (FrameOfReferenceUID !== imageVolume.metadata.FrameOfReferenceUID) {
+    //     throw new Error(
+    //       `Volumes being added to viewport ${this.id} do not share the same FrameOfReferenceUID. This is not yet supported`
+    //     );
+    //   }
+    // }
 
     return true;
   }
