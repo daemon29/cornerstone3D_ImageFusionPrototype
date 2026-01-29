@@ -148,6 +148,8 @@ addButtonToToolbar({
       ],
       [viewportIds[0], viewportIds[1], viewportIds[2]]
     );
+    setViewportColormap([viewportIds[0], viewportIds[1], viewportIds[2]],volumeId2,'Greens', renderingEngineId);
+
     await setVolumesForViewports(
       renderingEngine,
       [
@@ -241,33 +243,6 @@ async function run() {
 }
 
 run();
-
-async function createAndCacheGeometriesFromContours(
-  contourData,
-  segmentationId
-): Promise<{ geometryIds: string[]; assumedSurfaceIds: string[] }> {
-  const geometryIds: string[] = [];
-  const assumedSurfaceIds: string[] = [];
-
-  const promises = contourData.contourSets.map((contourSet, index) => {
-    if (contourSet.data.length > 0) {
-      const geometryId = contourSet.id;
-      const surfaceId = `segmentation_${segmentationId}_surface_${index + 1}`;
-      geometryIds.push(geometryId);
-      assumedSurfaceIds.push(surfaceId);
-      return geometryLoader.createAndCacheGeometry(geometryId, {
-        type: Enums.GeometryType.CONTOUR,
-        geometryData: contourSet,
-      });
-    }
-
-    return Promise.resolve(); // Fill empty slot with a resolved promise
-  });
-
-  await Promise.all(promises);
-
-  return { geometryIds, assumedSurfaceIds };
-}
 
 function SetToolGroup() {
   // Define tool groups to add the segmentation display tool to
@@ -372,4 +347,31 @@ async function handleVolumeLoad(evt: any) {
         isLoadBothFinished = true;
     }
   }
+}
+
+function setViewportColormap(  viewportIds: string[],
+  volumeId: string,
+  colormapName: string,
+  renderingEngineId: string,
+  options?: { opacity?: number; voiRange?: Types.VOIRange }) {
+  // Get the rendering engine
+  const renderingEngine = getRenderingEngine(renderingEngineId);
+  const { opacity = 1, voiRange } = options || {};
+
+  viewportIds.forEach((vpId) => {
+    const viewport = renderingEngine.getViewport(vpId) as Types.IVolumeViewport;
+
+    // Base properties: colormap + opacity
+    const properties: any = {
+      colormap: { name: colormapName, opacity },
+    };
+
+    // Add voiRange only if provided
+    if (voiRange) {
+      properties.voiRange = voiRange;
+    }
+
+    viewport.setProperties(properties, volumeId);
+    viewport.render();
+  });
 }

@@ -10,13 +10,13 @@ import type { mat4 } from 'gl-matrix';
 
 function fillGapAndReplaceCachedVolume(
   volumeId: string,
-  gaps?: [number, number][]
+  gaps?: [number, number][],
+  matrix?: mat4
 ) {
   const start = performance.now();
   // If there is a gap, then it will need to construct a new volume with filled gap, and replace the cached volume
   if (gaps && gaps.length !== 0) {
     const volume = cache.getVolume(volumeId);
-    console.log(volumeId);
     const voxelManager = volume.voxelManager;
     const metadata = volume.metadata;
     const direction = volume.direction;
@@ -70,7 +70,6 @@ function fillGapAndReplaceCachedVolume(
     const newDimensions = [x, y, finalZ] as Types.Point3;
     volume.destroy();
     volume.removeFromCache();
-    console.log(volumeId);
     volumeLoader.createLocalVolume(volumeId, {
       metadata: metadata,
       dimensions: newDimensions,
@@ -79,8 +78,18 @@ function fillGapAndReplaceCachedVolume(
       scalarData: newPixelData,
       spacing: newSpacing,
     });
-        console.log(volumeId);
-
+  }
+    if (matrix) {
+    const volume = cache.getVolume(volumeId);
+    let origin = volume.origin;
+    origin = [
+      origin[0] + matrix[3],
+      origin[1] + matrix[7],
+      origin[2] + matrix[11],
+    ];
+    volume.origin = origin;
+    volume.imageData.setOrigin(origin);
+    volume.modified();
   }
 
   const end = performance.now();
@@ -120,36 +129,11 @@ export async function adjustVolumeDataAfterLoad(param: {
     matrix?: mat4;
   };
   renderingEngineId: string;
-  ctViewportIds?: string[];
-  ptViewportIds?: string[];
   fusionViewportIds?: string[];
   threeDViewportIds?: string[];
 }) {
-  console.log(param);
   fillGapAndReplaceCachedVolume(param.ctInfo.volumeId, param.ctInfo.gaps);
-  fillGapAndReplaceCachedVolume(param.ptInfo.volumeId, param.ptInfo.gaps);
-  if (
-    param.ctViewportIds &&
-    param.ctViewportIds.length !== 0 &&
-    param.ctInfo.gaps.length !== 0
-  ) {
-    await replaceVolumeInViewports(
-      param.renderingEngineId,
-      param.ctViewportIds,
-      param.ctInfo.volumeId
-    );
-  }
-  if (
-    param.ptViewportIds &&
-    param.ptViewportIds.length !== 0 &&
-    param.ptInfo.gaps.length !== 0
-  ) {
-    await replaceVolumeInViewports(
-      param.renderingEngineId,
-      param.ptViewportIds,
-      param.ptInfo.volumeId
-    );
-  }
+  fillGapAndReplaceCachedVolume(param.ptInfo.volumeId, param.ptInfo.gaps, param.ptInfo.matrix);
   if (
     param.fusionViewportIds &&
     param.fusionViewportIds.length !== 0 &&
@@ -171,14 +155,6 @@ export async function adjustVolumeDataAfterLoad(param: {
       param.renderingEngineId,
       param.threeDViewportIds,
       param.ctInfo.volumeId
-    );
-  }
-  if (param.ptInfo.matrix) {
-    applyRegistration(
-      param.ptInfo.matrix,
-      param.ptInfo.volumeId,
-      param.renderingEngineId,
-      [...param.fusionViewportIds]
     );
   }
 }
@@ -232,7 +208,6 @@ async function replaceVolumeInFusionViewports(
   viewportIds: string[],
   ctVolumeId: string,
   ptVolumeId: string,
-
   immediateRender = true,
   suppressEvents = false
 ): Promise<void> {
@@ -257,7 +232,7 @@ async function replaceVolumeInFusionViewports(
         { volumeId: ctVolumeId },
         {
           volumeId: ptVolumeId,
-          blendMode: Enums.BlendModes.AVERAGE_INTENSITY_BLEND,
+          // blendMode: Enums.BlendModes.AVERAGE_INTENSITY_BLEND,
         },
       ],
       immediateRender,
@@ -266,24 +241,6 @@ async function replaceVolumeInFusionViewports(
     viewport.setProperties(ctProperties, ctVolumeId);
     viewport.setProperties(ptProperties, ptVolumeId);
     viewport.render();
-  });
-  await Promise.all(updateTasks);
-}
-async function applyRegistration(
-  matrix: mat4,
-  volumeId: string,
-  renderingEngineId: string,
-  viewportIds: string[]
-) {
-  const renderingEngine = getRenderingEngine(renderingEngineId);
-  const updateTasks = viewportIds.map(async (viewportId) => {
-    const viewport = renderingEngine.getViewport(viewportId) as VolumeViewport;
-    const actorEntry = viewport
-      .getActors()
-      .find((actor) => actor.referencedId === volumeId);
-    if (actorEntry) {
-      (actorEntry.actor as vtkVolume).setUserMatrix(matrix);
-    }
   });
   await Promise.all(updateTasks);
 }
