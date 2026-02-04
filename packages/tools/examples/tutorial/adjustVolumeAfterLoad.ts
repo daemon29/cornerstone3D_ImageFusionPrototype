@@ -129,11 +129,23 @@ export async function adjustVolumeDataAfterLoad(param: {
     matrix?: mat4;
   };
   renderingEngineId: string;
+  tempViewportIds?: string[];
   fusionViewportIds?: string[];
   threeDViewportIds?: string[];
 }) {
   fillGapAndReplaceCachedVolume(param.ctInfo.volumeId, param.ctInfo.gaps);
   fillGapAndReplaceCachedVolume(param.ptInfo.volumeId, param.ptInfo.gaps, param.ptInfo.matrix);
+  if (
+    param.tempViewportIds &&
+    param.tempViewportIds.length !== 0 &&
+    (param.ptInfo.gaps.length !== 0)
+  ){
+    await replaceVolumeInViewports(
+      param.renderingEngineId,
+      param.tempViewportIds,
+     param.ptInfo.volumeId
+    );
+  }
   if (
     param.fusionViewportIds &&
     param.fusionViewportIds.length !== 0 &&

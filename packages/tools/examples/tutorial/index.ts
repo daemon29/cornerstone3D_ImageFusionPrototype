@@ -11,10 +11,7 @@ import {
   RenderingEngine,
   setVolumesForViewports,
   volumeLoader,
-  eventTarget,
-  CONSTANTS,
-  metaData,
-  utilities,
+
 } from '@cornerstonejs/core';
 
 import * as cornerstoneTools from '@cornerstonejs/tools';
@@ -22,20 +19,16 @@ import {
   addButtonToToolbar,
   initDemo,
 } from '../../../../utils/demo/helpers';
-import type { Point3 } from 'core/src/types';
 import { createImageIdsAndCacheMetaData2 } from '../../../../utils/demo/helpers/createImageIdsAndCacheMetaData';
 import { adjustVolumeDataAfterLoad, adjustVolumeDataAfterLoadForSeries } from './adjustVolumeAfterLoad';
 import readDicomRegData from './readDicomRegData';
 
-// This is for debugging purposes
-console.debug(
-  'Click on index.ts to open source code for this example --------->'
-);
 
 const {
   ToolGroupManager,
   Enums: csToolsEnums,
   segmentation,
+  synchronizers,
   ZoomTool,
   PanTool,
   StackScrollTool,
@@ -44,6 +37,8 @@ const {
   OrientationMarkerTool,
   CrosshairsTool,
 } = cornerstoneTools;
+const { createCameraPositionSynchronizer, createVOISynchronizer} =
+  synchronizers;
 const { MouseBindings } = csToolsEnums;
 const { ViewportType } = Enums;
 
@@ -56,46 +51,12 @@ const volumeId1 = `${volumeLoaderScheme}:${volumeName1}`; // VolumeId with loade
 const volumeId2 = `${volumeLoaderScheme}:${volumeName2}`; // VolumeId with loader id + volume id
 var metadata1, metadata2;
 const toolGroupId = 'MY_TOOLGROUP_ID';
-const toolGroupId3d = 'MY_3DTOOLGROUP_ID';
-const size = '600px';
-const content = document.getElementById('content');
-const viewportGrid = document.createElement('div');
 var isLoadBothFinished = false;
 var registrationMatrix;
-// Use CSS grid for 2x2 layout
-viewportGrid.style.display = 'grid';
-viewportGrid.style.gridTemplateColumns = `${size} ${size}`;
-viewportGrid.style.gridTemplateRows = `${size} ${size}`;
-viewportGrid.style.gap = '0px'; // No spacing between viewports
-viewportGrid.style.width = `calc(2 * ${size})`;
-viewportGrid.style.height = `calc(2 * ${size})`;
 
-// Create each viewport element
-const element1 = document.createElement('div');
-element1.oncontextmenu = () => false;
-element1.style.width = size;
-element1.style.height = size;
-const element2 = document.createElement('div');
-element2.oncontextmenu = () => false;
-element2.style.width = size;
-element2.style.height = size;
-const element3 = document.createElement('div');
-element3.oncontextmenu = () => false;
-element3.style.width = size;
-element3.style.height = size;
-const element4 = document.createElement('div');
-element4.oncontextmenu = () => false;
-element4.style.width = size;
-element4.style.height = size;
-// Add to the grid in order
-viewportGrid.appendChild(element1);
-viewportGrid.appendChild(element2);
-viewportGrid.appendChild(element3);
-viewportGrid.appendChild(element4);
-
-// Add to page
-content.appendChild(viewportGrid);
-const viewportIds = ['CT_AXIAL', 'CT_SAGITTAL', 'CT_CORONAL', 'CT_3D'];
+const tempViewportIds = ['TEMP_AXIAL', 'TEMP_SAGITTAL', 'TEMP_CORONAL'];
+const viewportIds = ['FUSION_AXIAL', 'FUSION_SAGITTAL', 'FUSION_CORONAL'];
+createLayout(1920,1080, viewportIds, tempViewportIds);
 
 const renderingEngineId = 'myRenderingEngine';
 let renderingEngine: RenderingEngine;
@@ -129,12 +90,13 @@ addButtonToToolbar({
     const volume2 = await volumeLoader.createAndCacheVolume(volumeId2, {
       imageIds: imageIds2,
     });
-    volume1.load((evt) => {
-      handleVolumeLoad(evt);
-    });
     volume2.load(async (evt) => {
       handleVolumeLoad(evt);
     });
+    volume1.load((evt) => {
+      handleVolumeLoad(evt);
+    });
+
     await setVolumesForViewports(
       renderingEngine,
       [
@@ -148,25 +110,21 @@ addButtonToToolbar({
       ],
       [viewportIds[0], viewportIds[1], viewportIds[2]]
     );
-    setViewportColormap([viewportIds[0], viewportIds[1], viewportIds[2]],volumeId2,'Greens', renderingEngineId);
-
     await setVolumesForViewports(
       renderingEngine,
       [
         {
-          volumeId: volumeId1,
+          volumeId: volumeId2,
         },
-
       ],
-      [viewportIds[3]]
+      [tempViewportIds[0], tempViewportIds[1], tempViewportIds[2]]
     );
-    (
-      renderingEngine.getViewport(viewportIds[3]) as VolumeViewport3D
-    ).setProperties({
-      preset: 'CT-Bone',
-    });
+    setViewportColormap([tempViewportIds[0], tempViewportIds[1], tempViewportIds[2]],volumeId2,'Greens', renderingEngineId);
+    setViewportColormap([viewportIds[0], viewportIds[1], viewportIds[2]],volumeId2,'Greens', renderingEngineId);
     // Render the image
     renderingEngine.render();
+    InitializeCameraSync(renderingEngine, viewportIds, tempViewportIds);
+    SetUpSynchronizers(viewportIds, tempViewportIds);
   },
 });
 
@@ -195,50 +153,56 @@ async function run() {
     {
       viewportId: viewportIds[0],
       type: ViewportType.ORTHOGRAPHIC,
-      element: element1,
+      element: document.getElementById(viewportIds[0]),
       defaultOptions: {
         orientation: Enums.OrientationAxis.AXIAL,
-        background: <Types.Point3>[0.2, 0, 0.2],
       },
     },
     {
       viewportId: viewportIds[1],
       type: ViewportType.ORTHOGRAPHIC,
-      element: element2,
+      element: document.getElementById(viewportIds[1]),
       defaultOptions: {
         orientation: Enums.OrientationAxis.SAGITTAL,
-        background: <Types.Point3>[0.2, 0, 0.2],
       },
     },
     {
       viewportId: viewportIds[2],
       type: ViewportType.ORTHOGRAPHIC,
-      element: element3,
+      element: document.getElementById(viewportIds[2]),
       defaultOptions: {
         orientation: Enums.OrientationAxis.CORONAL,
-        background: <Types.Point3>[0.2, 0, 0.2],
+      },
+    },
+        {
+      viewportId: tempViewportIds[0],
+      type: ViewportType.ORTHOGRAPHIC,
+      element: document.getElementById(tempViewportIds[0]),
+      defaultOptions: {
+        orientation: Enums.OrientationAxis.AXIAL,
       },
     },
     {
-      viewportId: viewportIds[3],
-      type: ViewportType.VOLUME_3D,
-      element: element4,
+      viewportId: tempViewportIds[1],
+      type: ViewportType.ORTHOGRAPHIC,
+      element: document.getElementById(tempViewportIds[1]),
+      defaultOptions: {
+        orientation: Enums.OrientationAxis.SAGITTAL,
+      },
+    },
+    {
+      viewportId: tempViewportIds[2],
+      type: ViewportType.ORTHOGRAPHIC,
+      element: document.getElementById(tempViewportIds[2]),
       defaultOptions: {
         orientation: Enums.OrientationAxis.CORONAL,
-        background: CONSTANTS.BACKGROUND_COLORS.slicer3D as Point3,
       },
     },
   ];
-  [element1, element2, element3, element4].forEach((element) => {
+  [document.getElementById(viewportIds[0]), document.getElementById(viewportIds[1]), document.getElementById(viewportIds[2])].forEach((element) => {
     resizeObserver.observe(element);
   });
   renderingEngine.setViewports(viewportInputArray);
-  const temp = renderingEngine.getViewport(viewportIds[3]) as VolumeViewport3D;
-  segmentation.removeAllSegmentationRepresentations();
-  segmentation.state.removeAllSegmentationRepresentations();
-  temp.setProperties({
-    preset: 'CT-Bone',
-  });
   SetToolGroup();
 }
 
@@ -247,16 +211,14 @@ run();
 function SetToolGroup() {
   // Define tool groups to add the segmentation display tool to
   const toolGroup = ToolGroupManager.createToolGroup(toolGroupId);
-  const threeDToolGroup = ToolGroupManager.createToolGroup(toolGroupId3d);
   toolGroup.addTool(PanTool.toolName);
   toolGroup.addTool(ZoomTool.toolName);
   toolGroup.addTool(StackScrollTool.toolName);
-  toolGroup.addTool(PlanarFreehandContourSegmentationTool.toolName);
   toolGroup.addTool(OrientationMarkerTool.toolName);
   toolGroup.setToolActive(PanTool.toolName, {
     bindings: [
       {
-        mouseButton: MouseBindings.Auxiliary, // Middle Click
+        mouseButton: MouseBindings.Primary, // Middle Click
       },
     ],
   });
@@ -275,48 +237,25 @@ function SetToolGroup() {
       },
     ],
   });
-  toolGroup.setToolActive(PlanarFreehandContourSegmentationTool.toolName, {
-    bindings: [
-      {
-        mouseButton: MouseBindings.Fifth_Button,
-      },
-    ],
-  });
 
   toolGroup.setToolActive(OrientationMarkerTool.toolName);
   toolGroup.addViewport(viewportIds[0], renderingEngineId);
   toolGroup.addViewport(viewportIds[1], renderingEngineId);
   toolGroup.addViewport(viewportIds[2], renderingEngineId);
-  threeDToolGroup.addTool(PanTool.toolName);
-  threeDToolGroup.addTool(ZoomTool.toolName);
-  threeDToolGroup.addTool(StackScrollTool.toolName);
-  // threeDToolGRoup.addTool(SegmentationDisplayTool.toolName);
-  threeDToolGroup.addTool(TrackballRotateTool.toolName);
-
-  // threeDToolGRoup.setToolActive(ScaleOverlayTool.toolName);
-  threeDToolGroup.setToolActive(TrackballRotateTool.toolName, {
-    bindings: [
-      {
-        mouseButton: csToolsEnums.MouseBindings.Primary,
-      },
-    ],
-  });
-  threeDToolGroup.setToolActive(PanTool.toolName, {
-    bindings: [
-      {
-        mouseButton: csToolsEnums.MouseBindings.Auxiliary, // Middle Click
-      },
-    ],
-  });
-  threeDToolGroup.setToolActive(ZoomTool.toolName, {
-    bindings: [
-      {
-        mouseButton: csToolsEnums.MouseBindings.Secondary, // Right Click
-      },
-    ],
-  });
-  threeDToolGroup.setToolEnabled(OrientationMarkerTool.toolName);
-  threeDToolGroup.addViewport(viewportIds[3], renderingEngineId);
+  // const tempToolGroup = ToolGroupManager.createToolGroup('temp');
+  // tempToolGroup.addTool(StackScrollTool.toolName);
+  // // tempToolGroup.addTool(PanTool.toolName);
+  // // tempToolGroup.addTool(ZoomTool.toolName);
+  // tempToolGroup.setToolActive(StackScrollTool.toolName, {
+  //   bindings: [
+  //     {
+  //       mouseButton: MouseBindings.Wheel,
+  //     },
+  //   ],
+  // });
+  // tempToolGroup.addViewport(tempViewportIds[0], renderingEngineId);
+  // tempToolGroup.addViewport(tempViewportIds[1], renderingEngineId);
+  // tempToolGroup.addViewport(tempViewportIds[2], renderingEngineId);
 }
 async function handleVolumeLoad(evt: any) {
   if(evt.success && evt.complete){
@@ -333,13 +272,12 @@ async function handleVolumeLoad(evt: any) {
             matrix: registrationMatrix,
           },
           renderingEngineId: renderingEngineId,
-
+          tempViewportIds: tempViewportIds,
           fusionViewportIds: [
             viewportIds[0],
             viewportIds[1],
             viewportIds[2],
           ],
-          threeDViewportIds: [viewportIds[3]],
           });
         }, 50)
 
@@ -374,4 +312,108 @@ function setViewportColormap(  viewportIds: string[],
     viewport.setProperties(properties, volumeId);
     viewport.render();
   });
+}
+
+function createLayout(totalWidth, totalHeight, mainViewportId, tempViewportId) {
+  const content = document.getElementById('content');
+
+  const viewportGrid = document.createElement('div');
+  viewportGrid.style.display = 'grid';
+  viewportGrid.style.width = totalWidth + 'px';
+  viewportGrid.style.height = totalHeight + 'px';
+
+  viewportGrid.style.gridTemplateColumns = '2fr 1fr';
+  viewportGrid.style.gridTemplateRows = '1fr 1fr';
+
+  // ---------- helper ----------
+  function createStack(mainId, tempId) {
+    const container = document.createElement('div');
+    container.style.position = 'relative';
+    container.style.width = '100%';
+    container.style.height = '100%';
+
+    const temp = document.createElement('div');
+    temp.id = tempId;
+    temp.style.position = 'absolute';
+    temp.style.inset = '0';
+    temp.style.zIndex = '1';
+    temp.style.pointerEvents = 'none';
+    temp.oncontextmenu = () => false;
+
+    const main = document.createElement('div');
+    main.id = mainId;
+    main.style.position = 'absolute';
+    main.style.inset = '0';
+    main.style.zIndex = '2';
+    main.oncontextmenu = () => false;
+
+    container.appendChild(temp); // bottom first
+    container.appendChild(main); // top
+
+    return container;
+  }
+
+  // ---------- create 3 stacked cells ----------
+  const left = createStack(mainViewportId[0], tempViewportId[0]);
+  left.style.gridRow = '1 / span 2';
+
+  const topRight = createStack(mainViewportId[1], tempViewportId[1]);
+  const bottomRight = createStack(mainViewportId[2], tempViewportId[2]);
+
+  viewportGrid.appendChild(left);
+  viewportGrid.appendChild(topRight);
+  viewportGrid.appendChild(bottomRight);
+
+  content.appendChild(viewportGrid);
+}
+
+function SetUpSynchronizers(viewportIds, tempViewportIds){
+  var axialCameraPositionSynchronizer = createCameraPositionSynchronizer(
+    "AXIAL_CAMERA_SYNC"
+  );
+  var sagittalCameraPositionSynchronizer = createCameraPositionSynchronizer(
+    "SAGITTAL_CAMERA_SYNC"
+  );
+  var coronalCameraPositionSynchronizer = createCameraPositionSynchronizer(
+    "CORONAL_CAMERA_SYNC"
+  );
+  [viewportIds[0],tempViewportIds[0]].forEach((viewportId) => {
+    axialCameraPositionSynchronizer.add({
+      renderingEngineId,
+      viewportId,
+    });
+  });
+  [viewportIds[1],tempViewportIds[1]].forEach((viewportId) => {
+    sagittalCameraPositionSynchronizer.add({
+      renderingEngineId,
+      viewportId,
+    });
+  });
+  [viewportIds[2],tempViewportIds[2]].forEach((viewportId) => {
+    coronalCameraPositionSynchronizer.add({
+      renderingEngineId,
+      viewportId,
+    });
+  });
+}
+
+function InitializeCameraSync(renderingEngine, mainViewportIds, tempViewportIds){
+  var mainAxial = renderingEngine.getViewport(mainViewportIds[0]);
+  var mainSagittal = renderingEngine.getViewport(mainViewportIds[1]);
+  var mainCoronal = renderingEngine.getViewport(mainViewportIds[2]);
+  var tempAxial = renderingEngine.getViewport(tempViewportIds[0]);
+  var tempSagittal = renderingEngine.getViewport(tempViewportIds[1]);
+  var tempCoronal = renderingEngine.getViewport(tempViewportIds[2]);
+  initCameraSynchronization(mainAxial, tempAxial);
+  initCameraSynchronization(mainSagittal, tempSagittal);
+  initCameraSynchronization(mainCoronal, tempCoronal);
+  renderingEngine.render();
+}
+function initCameraSynchronization(sViewport, tViewport) {
+  // Initialise the sync as they viewports will have
+  // Different initial zoom levels for viewports of different sizes.
+
+  const camera = sViewport.getCamera();
+
+  tViewport.setCamera(camera);
 }
